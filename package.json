@@ -1,0 +1,23 @@
+{
+  "name": "promisea",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "ts": "ts-node index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiexuan-star/PromiseA-Demo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/xiexuan-star/PromiseA-Demo/issues"
+  },
+  "homepage": "https://github.com/xiexuan-star/PromiseA-Demo#readme",
+  "dependencies": {
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.2"
+  }
+}

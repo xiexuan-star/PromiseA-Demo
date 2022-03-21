@@ -9,12 +9,36 @@ type RejectedHandler = (r: any) => any;
 
 type PromiseHandler<T> = (resolve: (value: T) => void, reject: (reason: any) => any) => any
 
+function isThenable(v: any) {
+  let result = false;
+  try {
+    result = typeof Reflect.get(v, 'then') === 'function';
+  } catch (e) {
+    //
+  }
+  return result;
+}
+
 class PromiseMe<T extends any = any> {
   private state = PROMISE_STATE.PENDING;
   private value?: T;
   private reason: any;
   private onFulfilledHandler: FulfilledHandler<T>[] = [];
   private onRejectedHandler: RejectedHandler[] = [];
+
+  static resolve(v?: any) {
+    if (v instanceof PromiseMe) return v;
+    if (!v || !isThenable(v)) return new PromiseMe(resolve => resolve(v));
+    return new PromiseMe((resolve, reject) => {
+      v.then(resolve, reject);
+    }).then(sv => {
+      if (isThenable(sv)) {
+        return PromiseMe.resolve(sv);
+      } else {
+        return sv;
+      }
+    });
+  }
 
   constructor(handler: PromiseHandler<T>) {
     try {
@@ -68,7 +92,13 @@ class PromiseMe<T extends any = any> {
         if (typeof onFulfilled === 'function') {
           this.onFulfilledHandler.push((value: T) => {
             try {
-              resolve(onFulfilled!(value));
+              if (isThenable(value)) {
+                PromiseMe.resolve(value).then(v => {
+                  resolve(onFulfilled!(v));
+                });
+              } else {
+                resolve(onFulfilled!(value));
+              }
             } catch (e) {
               reject(e);
             }
@@ -76,7 +106,8 @@ class PromiseMe<T extends any = any> {
           if (typeof onRejected === 'function') {
             this.onRejectedHandler.push((reason: any) => {
               try {
-                resolve(onRejected!(reason));
+                const res = onRejected!(reason);
+                PromiseMe.resolve(res).then(resolve, reject);
               } catch (e) {
                 reject(e);
               }
@@ -91,3 +122,7 @@ class PromiseMe<T extends any = any> {
     return result;
   }
 }
+
+PromiseMe.resolve({ then(r, j) {r({ a: 1, then(r) {r(3);} });} }).then(v => {
+  console.log(v);
+});
