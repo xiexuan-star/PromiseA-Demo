@@ -92,6 +92,9 @@ class PromiseMe<T extends any = any> {
         if (typeof onFulfilled === 'function') {
           this.onFulfilledHandler.push((value: T) => {
             try {
+              if (value === this) {
+                throw new TypeError('[PromiseMe]:promise and value refer to the same object');
+              }
               if (isThenable(value)) {
                 PromiseMe.resolve(value).then(v => {
                   resolve(onFulfilled!(v));
