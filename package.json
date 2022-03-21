@@ -4,11 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "ts": "ts-node index.ts"
+    "ts": "ts-node index.js",
+    "test": "promises-aplus-tests index.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xiexuan-star/PromiseA-Demo.git"
+    "url": "git+https://github.com/xiexuan-star/PromiseA-Demo.git",
+    "test": "run-my-own-tests && promises-aplus-tests index.test.js"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +19,7 @@
   },
   "homepage": "https://github.com/xiexuan-star/PromiseA-Demo#readme",
   "dependencies": {
+    "promises-aplus-tests": "^2.1.2",
     "ts-node": "^10.7.0",
     "typescript": "^4.6.2"
   }
