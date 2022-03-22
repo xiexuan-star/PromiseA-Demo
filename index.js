@@ -17,119 +17,99 @@ function isThenable(v) {
 
 class PromiseMe {
   state = PROMISE_STATE.PENDING;
-  value;
-  reason;
-  onFulfilledHandler = [];
-  onRejectedHandler = [];
+  fulfilledEvents = [];
+  rejectedEvents = [];
 
-  static resolve(v) {
-    if (v instanceof PromiseMe) return v;
-    if (!v || !isThenable(v)) return new PromiseMe(resolve => resolve(v));
-    return new PromiseMe((resolve, reject) => {
+  constructor(fn) {
+    fn(this.setFulfilled.bind(this), this.setRejected.bind(this));
+  }
+
+  static resolve(any) {
+    console.log('resolve=>', any);
+    if (!isThenable(any)) return new PromiseMe(r => r(any));
+    return new PromiseMe((r, j) => {
       try {
-
-        v.then(resolve, reject);
+        any.then(r, j);
       } catch (e) {
-        reject(e);
+        j(e);
       }
-    }).then(sv => {
-      if (isThenable(sv)) {
-        return PromiseMe.resolve(sv);
-      } else {
-        return sv;
+    }).then(v => {
+      if (isThenable(v)) {
+        return PromiseMe.resolve(v);
       }
+      return v;
     });
   }
 
-  constructor(handler) {
-    try {
-      handler(this.setFulfilled.bind(this), this.setRejected.bind(this));
-    } catch (e) {
-      this.setRejected(e);
-    }
-  }
-
-  trigger() {
+  trigger(type) {
     if (this.state === PROMISE_STATE.PENDING) return;
-    if (this.state === PROMISE_STATE.FULFILLED) {
-      this.onFulfilledHandler.forEach(cb => {
-        queueMicrotask(cb.bind(undefined, this.value
-        ))
-        ;
+    if (type === PROMISE_STATE.FULFILLED) {
+      this.fulfilledEvents.forEach(event => {
+        queueMicrotask(event.bind(undefined, this.value));
       });
+      this.fulfilledEvents.length = 0;
     } else {
-      this.onRejectedHandler.forEach(cb => {
-        queueMicrotask(cb.bind(undefined, this.reason));
+      this.rejectedEvents.forEach(event => {
+        queueMicrotask(event.bind(undefined, this.reason));
       });
+      this.rejectedEvents.length = 0;
     }
-    this.onRejectedHandler.length = 0;
-    this.onFulfilledHandler.length = 0;
   }
 
   setFulfilled(value) {
-    if (!this.updateState(PROMISE_STATE.FULFILLED)) return;
-    this.value = value;
-    this.trigger();
+    if (this.state !== PROMISE_STATE.PENDING) return;
+    this.unThen(value, v => {
+      this.value = v;
+      this.state = PROMISE_STATE.FULFILLED;
+      this.trigger(PROMISE_STATE.FULFILLED);
+    }, reason => {
+      this.setRejected(reason);
+    });
   }
 
   setRejected(reason) {
-    if (!this.updateState(PROMISE_STATE.REJECTED)) return;
+    if (this.state !== PROMISE_STATE.PENDING) return;
+    this.state = PROMISE_STATE.REJECTED;
     this.reason = reason;
-    this.trigger();
+    this.trigger(PROMISE_STATE.REJECTED);
   }
 
-  updateState(state) {
-    if (this.state !== PROMISE_STATE.PENDING) return false;
-    if ([PROMISE_STATE.FULFILLED, PROMISE_STATE.REJECTED].includes(state)) {
-      this.state = state;
-      return true;
+  unThen(instance, resolve, reject) {
+    if (isThenable(instance)) {
+      return PromiseMe.resolve(instance).then(resolve, reject);
+    } else {
+      return resolve(instance);
     }
-    return false;
   }
 
   then(onFulfilled, onRejected) {
     onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : (v => v);
     onRejected = typeof onRejected === 'function' ? onRejected : (r => {throw r;});
-    return new PromiseMe((resolve, reject) => {
-        const resolvePromise = (value) => {
-          try {
-            if (value === this) {
-              throw new TypeError('[PromiseMe]:promise and value refer to the same object');
-            }
-            if (isThenable(value)) {
-              PromiseMe.resolve(value).then(v => {
-                resolve(onFulfilled(v));
-              }, err => reject(err));
-            } else {
-              resolve(onFulfilled(value));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        };
-        if (this.state === PROMISE_STATE.FULFILLED) {
-          queueMicrotask(() => {
-            resolvePromise(this.value);
-          });
-        } else {
-          this.onFulfilledHandler.push(resolvePromise);
+    const result = new PromiseMe((resolve, reject) => {
+      this.fulfilledEvents.push(value => {
+        try {
+          const res = this.unThen(value, onFulfilled);
+          if (res === result) throw new TypeError(`promise and x refer to the same object,`);
+          console.log(res, value);
+          this.unThen(res, resolve, reject);
+        } catch (e) {
+          reject(e);
         }
-        const rejectPromise = (reason) => {
-          try {
-            reject(onRejected(reason));
-          } catch (e) {
-            reject(e);
-          }
-        };
-        if (this.state === PROMISE_STATE.REJECTED) {
-          queueMicrotask(() => {
-            rejectPromise(this.reason);
-          });
-        } else {
-          this.onRejectedHandler.push(rejectPromise);
+      });
+      this.rejectedEvents.push(reason => {
+        try {
+          const res = onRejected(reason);
+          if (res === result) throw new TypeError(`promise and x refer to the same object,`);
+          resolve(res);
+        } catch (e) {
+          reject(e);
         }
+      });
+      if (this.state !== PROMISE_STATE.PENDING) {
+        this.trigger(this.state);
       }
-    );
+    });
+    return result;
   }
 
   static deferred() {
@@ -141,15 +121,18 @@ class PromiseMe {
 
     return result;
   }
-};
+}
 
-new PromiseMe((r, j) => {
-  j(22);
-}).then(2, (r) => {
-  console.log(r);
-  return ++r;
-}).then(2, r => {
-  console.log(r);
+const a = new PromiseMe((resolve, rejected) => {
+  const res = { then: Object.create(null) };
+  resolve(res);
+});
+const b = new Promise((resolve, rejected) => {
+  const res = { then: Object.create(null) };
+  resolve(res);
 });
 
+setTimeout(() => {
+  console.log(a, b);
+});
 module.exports = PromiseMe;
